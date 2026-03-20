@@ -3,8 +3,8 @@
 自定义JSON编码，通过Tag中添加prec信息，对浮点数进行精度控制
 
 ## 使用说明
-1.保留两位小数`json:"price" prec:"2"`
-2.保留两位小数且转为字符串`json:"price" prec:"2,string"`
+ 1.保留两位小数`json:"price" prec:"2"`
+ 2.保留两位小数且转为字符串`json:"price" prec:"2,string"`
 
 ## 测试示例
 ```go
