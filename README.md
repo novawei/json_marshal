@@ -9,10 +9,10 @@
 ## 测试示例
 ```go
 type TestObj struct {
-		Price  float32 `json:"price" prec:"2,string"`
-		Length float64 `json:"length" prec:"4"`
-		Ignore int     `json:"-"`
-		NoTag  string
+	Price  float32 `json:"price" prec:"2,string"`
+	Length float64 `json:"length" prec:"4"`
+	Ignore int     `json:"-"`
+	NoTag  string
 }
 t1 := TestObj{Price: 1.2345, Length: 100.2932999}
 t2 := TestObj{Price: 34.2345, Length: 200.29}
@@ -23,13 +23,13 @@ output, err = JsonMarshalIndent([]TestObj{t1, t2})
 fmt.Println(string(output))
 
 output, err = JsonMarshalIndent(map[string]any{
-		"objs": []TestObj{t1, t2},
-		"t1":   t1,
-		"t2":   t2,
-		"t3": map[string]any{
-        "name":  "hello",
-			  "price": 123.456,
-		},
+	"objs": []TestObj{t1, t2},
+	"t1":   t1,
+	"t2":   t2,
+	"t3": map[string]any{
+		"name":  "hello",
+		"price": 123.456,
+	},
 })
 fmt.Println(string(output))
 ```
