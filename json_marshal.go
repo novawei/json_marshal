@@ -59,7 +59,7 @@ func destruct(obj interface{}) (interface{}, error) {
 			if jsonTag == "-" || !value.CanInterface() {
 				continue
 			}
-			if strings.Contains(jsonTag, "omitempty") && value.IsZero() {
+			if strings.Contains(jsonTag, "omitempty") && isEmptyValue(value) {
 				continue
 			}
 			outputKey := strings.Split(jsonTag, ",")[0]
