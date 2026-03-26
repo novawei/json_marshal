@@ -1,4 +1,4 @@
-package main
+package util
 
 import (
 	"encoding/json"
@@ -7,31 +7,66 @@ import (
 	"strings"
 )
 
-func checkNeedDestruct(k reflect.Kind) bool {
-	return k == reflect.Struct || k == reflect.Slice || k == reflect.Array || k == reflect.Map
-}
-
-func unref(v reflect.Value) reflect.Value {
+func indirect(v reflect.Value) reflect.Value {
 	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
-		v = v.Elem()
+		if v.IsNil() {
+			return v
+		} else {
+			return v.Elem()
+		}
 	}
 	return v
 }
 
+func isDestructableValue(v reflect.Value) bool {
+	switch v.Type().String() {
+	case "time.Time":
+		return false
+	default:
+		k := v.Kind()
+		return k == reflect.Struct || k == reflect.Slice || k == reflect.Array || k == reflect.Map
+	}
+}
+
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Ptr, reflect.Interface:
+		return v.IsNil()
+	}
+	return false
+}
+
 func destruct(obj interface{}) (interface{}, error) {
-	v := unref(reflect.ValueOf(obj))
-	if v.Kind() == reflect.Struct {
+	v := indirect(reflect.ValueOf(obj))
+	switch v.Kind() {
+	case reflect.Struct:
 		output := map[string]interface{}{}
 		t := v.Type()
 		for i := 0; i < t.NumField(); i++ {
 			field := t.Field(i)
-			value := unref(v.Field(i))
-			tag := field.Tag.Get("json")
-			if len(tag) == 0 || strings.Contains(tag, "-") {
+			value := indirect(v.Field(i))
+			jsonTag := field.Tag.Get("json")
+			if jsonTag == "-" || !value.CanInterface() {
 				continue
 			}
-			outputKey := strings.Split(tag, ",")[0]
-			if checkNeedDestruct(value.Kind()) {
+			if strings.Contains(jsonTag, "omitempty") && value.IsZero() {
+				continue
+			}
+			outputKey := strings.Split(jsonTag, ",")[0]
+			if len(outputKey) == 0 {
+				outputKey = field.Name
+			}
+			if isDestructableValue(value) {
 				outputVal, err := destruct(value.Interface())
 				if err != nil {
 					return nil, err
@@ -39,18 +74,18 @@ func destruct(obj interface{}) (interface{}, error) {
 				output[outputKey] = outputVal
 			} else {
 				if value.Kind() == reflect.Float32 || value.Kind() == reflect.Float64 {
-					tag := field.Tag.Get("prec")
-					if len(tag) == 0 {
+					precTag := field.Tag.Get("prec")
+					if len(precTag) == 0 {
 						output[outputKey] = value.Interface()
 					} else {
-						precStr := strings.Split(tag, ",")[0]
+						precStr := strings.Split(precTag, ",")[0]
 						prec, err := strconv.ParseInt(precStr, 10, 32)
 						if err != nil {
 							return nil, err
 						}
 						f := value.Float()
 						fstr := strconv.FormatFloat(f, 'f', int(prec), 64)
-						if strings.Contains(tag, "string") {
+						if strings.Contains(precTag, "string") {
 							output[outputKey] = fstr
 						} else {
 							output[outputKey], _ = strconv.ParseFloat(fstr, 64)
@@ -62,11 +97,11 @@ func destruct(obj interface{}) (interface{}, error) {
 			}
 		}
 		return output, nil
-	} else if v.Kind() == reflect.Slice || v.Kind() == reflect.Array {
+	case reflect.Slice, reflect.Array:
 		output := []interface{}{}
 		for i := 0; i < v.Len(); i++ {
-			value := unref(v.Index(i))
-			if checkNeedDestruct(value.Kind()) {
+			value := indirect(v.Index(i))
+			if isDestructableValue(value) {
 				outputVal, err := destruct(value.Interface())
 				if err != nil {
 					return nil, err
@@ -77,11 +112,11 @@ func destruct(obj interface{}) (interface{}, error) {
 			}
 		}
 		return output, nil
-	} else if v.Kind() == reflect.Map {
+	case reflect.Map:
 		output := map[string]interface{}{}
 		for _, k := range v.MapKeys() {
-			value := unref(v.MapIndex(k))
-			if checkNeedDestruct(value.Kind()) {
+			value := indirect(v.MapIndex(k))
+			if isDestructableValue(value) {
 				outputVal, err := destruct(value.Interface())
 				if err != nil {
 					return nil, err
@@ -92,8 +127,9 @@ func destruct(obj interface{}) (interface{}, error) {
 			}
 		}
 		return output, nil
+	default:
+		return obj, nil
 	}
-	return obj, nil
 }
 
 // 自定义JSON编码，通过Tag中添加prec信息，对浮点数进行精度控制
@@ -140,4 +176,3 @@ func JsonMarshalIndent(obj interface{}) ([]byte, error) {
 	}
 	return json.MarshalIndent(val, "", "    ")
 }
-
